@@ -4,6 +4,8 @@
 #define NOMINMAX
 #include <windows.h>
 #include <shellapi.h>
+#include <shlobj.h>
+#include <knownfolders.h>
 #include <dwmapi.h>
 #include <algorithm>
 #include <string>
@@ -56,7 +58,46 @@ std::wstring Setting(const wchar_t* key, const wchar_t* fallback = L"") {
 }
 void Save(const wchar_t* key, const std::wstring& value) {
     if (!WritePrivateProfileStringW(L"LeftStrip", key, value.c_str(), ini.c_str()))
-        MessageBoxW(bar, L"Cannot save LeftStrip.ini. Move the folder to a writable location.", L"LeftStrip", MB_ICONWARNING);
+        MessageBoxW(bar, L"Cannot save LeftStrip.ini. Ensure the config location is writable.", L"LeftStrip", MB_ICONWARNING);
+}
+void WriteDefaultIni(const std::wstring& path) {
+    WritePrivateProfileStringW(L"LeftStrip", L"WidthPercent", L"20", path.c_str());
+    WritePrivateProfileStringW(L"LeftStrip", L"ProcessName", L"", path.c_str());
+    WritePrivateProfileStringW(L"LeftStrip", L"TitleContains", L"", path.c_str());
+    WritePrivateProfileStringW(L"LeftStrip", L"WindowClass", L"", path.c_str());
+    WritePrivateProfileStringW(L"LeftStrip", L"PollMilliseconds", L"1000", path.c_str());
+    WritePrivateProfileStringW(L"LeftStrip", L"AlwaysOnTop", L"0", path.c_str());
+    WritePrivateProfileStringW(L"LeftStrip", L"RestoreOnExit", L"1", path.c_str());
+}
+// Portable: LeftStrip.ini beside the exe. Installed: %AppData%\LeftStrip\LeftStrip.ini
+std::wstring ResolveIni(const std::wstring& exePath) {
+    std::wstring dir = exePath.substr(0, exePath.find_last_of(L"\\/") + 1);
+    std::wstring portable = dir + L"LeftStrip.ini";
+    if (GetFileAttributesW(portable.c_str()) != INVALID_FILE_ATTRIBUTES) return portable;
+
+    PWSTR appdata{};
+    if (FAILED(SHGetKnownFolderPath(FOLDERID_RoamingAppData, KF_FLAG_DEFAULT, nullptr, &appdata)))
+        return portable;
+    std::wstring folder = std::wstring(appdata) + L"\\LeftStrip";
+    CoTaskMemFree(appdata);
+    CreateDirectoryW(folder.c_str(), nullptr);
+    std::wstring dest = folder + L"\\LeftStrip.ini";
+    if (GetFileAttributesW(dest.c_str()) == INVALID_FILE_ATTRIBUTES) {
+        std::wstring seed = dir + L"LeftStrip.ini.default";
+        if (!CopyFileW(seed.c_str(), dest.c_str(), TRUE)) WriteDefaultIni(dest);
+    }
+    return dest;
+}
+bool HasQuitSwitch() {
+    int argc = 0;
+    LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc);
+    if (!argv) return false;
+    bool quit = false;
+    for (int i = 1; i < argc; ++i) {
+        if (wcscmp(argv[i], L"--quit") == 0) { quit = true; break; }
+    }
+    LocalFree(argv);
+    return quit;
 }
 APPBARDATA Data() { APPBARDATA d{}; d.cbSize = sizeof(d); d.hWnd = bar; return d; }
 void Unregister() {
@@ -264,10 +305,10 @@ LRESULT CALLBACK WndProc(HWND w, UINT msg, WPARAM wp, LPARAM lp) {
     }
     return DefWindowProcW(w,msg,wp,lp);
 }
-int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR args,int) {
+int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR,int) {
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     // One instance per interactive session; --quit does not start a reservation.
-    if (wcscmp(args,L"--quit")==0) { if (HWND w=FindWindowW(ClassName,nullptr)) PostMessageW(w,WM_CLOSE,0,0); return 0; }
+    if (HasQuitSwitch()) { if (HWND w=FindWindowW(ClassName,nullptr)) PostMessageW(w,WM_CLOSE,0,0); return 0; }
     HANDLE mutex = CreateMutexW(nullptr,FALSE,L"Local\\LeftStrip.Native.v1");
     if (!mutex || GetLastError()==ERROR_ALREADY_EXISTS) { if(mutex)CloseHandle(mutex); return 0; }
     app = instance;
@@ -275,7 +316,7 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR args,int) {
     iconSmall = (HICON)LoadImageW(app, MAKEINTRESOURCEW(IDI_MAINICON), IMAGE_ICON,
         GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON), 0);
     wchar_t path[32768]{}; GetModuleFileNameW(nullptr,path,32768); exe=path;
-    ini=exe.substr(0,exe.find_last_of(L"\\/")+1)+L"LeftStrip.ini";
+    ini = ResolveIni(exe);
     taskbarCreated=RegisterWindowMessageW(L"TaskbarCreated");
     WNDCLASSEXW wc{sizeof(wc)}; wc.lpfnWndProc=WndProc; wc.hInstance=instance; wc.lpszClassName=ClassName;
     wc.hIcon = iconLarge; wc.hIconSm = iconSmall;

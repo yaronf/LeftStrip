@@ -1,6 +1,7 @@
 # Build outputs
 build/
 test-build/
+dist/
 *.exe
 *.obj
 *.res
