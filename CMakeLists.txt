@@ -1,0 +1,11 @@
+cmake_minimum_required(VERSION 3.20)
+project(LeftStrip LANGUAGES CXX)
+add_executable(LeftStrip WIN32 LeftStrip.cpp)
+target_compile_features(LeftStrip PRIVATE cxx_std_17)
+target_link_libraries(LeftStrip PRIVATE user32 shell32 advapi32 dwmapi gdi32)
+if(MSVC)
+  target_compile_options(LeftStrip PRIVATE /W4 /permissive- /utf-8)
+  set_property(TARGET LeftStrip PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
+add_custom_command(TARGET LeftStrip POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_if_different
+  "${CMAKE_CURRENT_SOURCE_DIR}/LeftStrip.ini" "$<TARGET_FILE_DIR:LeftStrip>/LeftStrip.ini")

@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 3.20)
+project(LeftStripIntegration LANGUAGES CXX)
+add_executable(IntegrationTest IntegrationTest.cpp)
+target_compile_features(IntegrationTest PRIVATE cxx_std_17)
+target_link_libraries(IntegrationTest PRIVATE user32 dwmapi shell32)
