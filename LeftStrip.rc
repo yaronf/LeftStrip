@@ -1,0 +1,2 @@
+#include "resource.h"
+IDI_MAINICON ICON "LeftStrip.ico"

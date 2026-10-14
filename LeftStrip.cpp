@@ -10,11 +10,14 @@
 #include <vector>
 #include <cwctype>
 #include <cstdlib>
+#include "resource.h"
 
 // LeftStrip: a separate AppBar owns the reservation. The target stays top-level.
 constexpr wchar_t ClassName[] = L"LeftStrip.Native.v1";
 constexpr UINT Callback = WM_APP + 1, Tray = WM_APP + 2, Relayout = WM_APP + 3;
 constexpr UINT PickBase = 1000;
+HINSTANCE app{};
+HICON iconLarge{}, iconSmall{};
 HWND bar{}, target{};
 UINT taskbarCreated{};
 bool registered{}, positioning{}, quitting{}, paused{}, fullscreen{};
@@ -183,7 +186,8 @@ void ToggleStartup() {
 void TrayIcon(bool add) {
     NOTIFYICONDATAW n{}; n.cbSize = sizeof(n); n.hWnd = bar; n.uID = 1;
     n.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP; n.uCallbackMessage = Tray;
-    n.hIcon = LoadIconW(nullptr, IDI_APPLICATION); wcscpy_s(n.szTip, L"LeftStrip - right-click for controls");
+    n.hIcon = iconSmall ? iconSmall : LoadIconW(nullptr, IDI_APPLICATION);
+    wcscpy_s(n.szTip, L"LeftStrip - right-click for controls");
     Shell_NotifyIconW(add ? NIM_ADD : NIM_DELETE, &n);
 }
 void Menu() {
@@ -266,21 +270,34 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR args,int) {
     if (wcscmp(args,L"--quit")==0) { if (HWND w=FindWindowW(ClassName,nullptr)) PostMessageW(w,WM_CLOSE,0,0); return 0; }
     HANDLE mutex = CreateMutexW(nullptr,FALSE,L"Local\\LeftStrip.Native.v1");
     if (!mutex || GetLastError()==ERROR_ALREADY_EXISTS) { if(mutex)CloseHandle(mutex); return 0; }
+    app = instance;
+    iconLarge = (HICON)LoadImageW(app, MAKEINTRESOURCEW(IDI_MAINICON), IMAGE_ICON, 0, 0, LR_DEFAULTSIZE);
+    iconSmall = (HICON)LoadImageW(app, MAKEINTRESOURCEW(IDI_MAINICON), IMAGE_ICON,
+        GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON), 0);
     wchar_t path[32768]{}; GetModuleFileNameW(nullptr,path,32768); exe=path;
     ini=exe.substr(0,exe.find_last_of(L"\\/")+1)+L"LeftStrip.ini";
     taskbarCreated=RegisterWindowMessageW(L"TaskbarCreated");
-    WNDCLASSW wc{}; wc.lpfnWndProc=WndProc; wc.hInstance=instance; wc.lpszClassName=ClassName;
+    WNDCLASSEXW wc{sizeof(wc)}; wc.lpfnWndProc=WndProc; wc.hInstance=instance; wc.lpszClassName=ClassName;
+    wc.hIcon = iconLarge; wc.hIconSm = iconSmall;
     wc.hCursor=LoadCursorW(nullptr,IDC_ARROW); wc.hbrBackground=CreateSolidBrush(RGB(30,30,30));
-    RegisterClassW(&wc);
+    RegisterClassExW(&wc);
     bar=CreateWindowExW(WS_EX_TOOLWINDOW|WS_EX_NOACTIVATE,ClassName,L"LeftStrip",WS_POPUP,0,0,1,1,nullptr,nullptr,instance,nullptr);
-    if (!bar) { DeleteObject(wc.hbrBackground); CloseHandle(mutex); return 1; }
+    if (!bar) {
+        DeleteObject(wc.hbrBackground);
+        if (iconLarge) DestroyIcon(iconLarge);
+        if (iconSmall) DestroyIcon(iconSmall);
+        CloseHandle(mutex); return 1;
+    }
     Load(); Tick(); TrayIcon(true);
     if (!Register()) {
         MessageBoxW(bar,L"Windows could not register the AppBar. LeftStrip will exit.",L"LeftStrip",MB_ICONERROR);
         SendMessageW(bar,WM_CLOSE,0,0);
     } else Tick();
     MSG msg{}; while (GetMessageW(&msg,nullptr,0,0)>0) { TranslateMessage(&msg); DispatchMessageW(&msg); }
-    Unregister(); ReleaseTarget(); DeleteObject(wc.hbrBackground); CloseHandle(mutex); return 0;
+    Unregister(); ReleaseTarget(); DeleteObject(wc.hbrBackground);
+    if (iconLarge) DestroyIcon(iconLarge);
+    if (iconSmall) DestroyIcon(iconSmall);
+    CloseHandle(mutex); return 0;
 }
 
 

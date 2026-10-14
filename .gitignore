@@ -3,6 +3,7 @@ build/
 test-build/
 *.exe
 *.obj
+*.res
 *.pdb
 *.ilk
 *.exp
