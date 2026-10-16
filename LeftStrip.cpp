@@ -12,6 +12,7 @@
 #include <vector>
 #include <cwctype>
 #include <cstdlib>
+#include <cstdio>
 #include "resource.h"
 
 // LeftStrip: a separate AppBar owns the reservation. The target stays top-level.
@@ -31,6 +32,7 @@ bool originalTopmost{}, originalToolWindow{};
 RECT originalScreenNormal{};
 std::wstring ini, exe, processFilter, titleFilter, classFilter;
 int percent = 20, interval = 1000;
+int fittedWidth = 0, pendingFit = 0; // Wider than percent when the target will not shrink.
 bool keepTop = false, restoreOnExit = true;
 std::vector<HWND> choices;
 
@@ -123,6 +125,16 @@ void ReleaseTarget() {
     target = nullptr; targetPid = 0;
     if (targetProcess) CloseHandle(targetProcess);
     targetProcess = nullptr;
+    fittedWidth = 0; pendingFit = 0;
+}
+void Log(const wchar_t* line) {
+    if (ini.empty()) return;
+    std::wstring path = ini.substr(0, ini.find_last_of(L"\\/") + 1) + L"LeftStrip.log";
+    FILE* f = nullptr;
+    if (_wfopen_s(&f, path.c_str(), L"a, ccs=UTF-8") != 0 || !f) return;
+    SYSTEMTIME t{}; GetLocalTime(&t);
+    fwprintf(f, L"%02u:%02u:%02u %s\n", t.wHour, t.wMinute, t.wSecond, line);
+    fclose(f);
 }
 bool Attach(HWND w) {
     if (w == target && SameTarget()) return true;
@@ -141,6 +153,54 @@ bool Attach(HWND w) {
     }
     originalTopmost = (GetWindowLongPtrW(w, GWL_EXSTYLE) & WS_EX_TOPMOST) != 0;
     return true;
+}
+bool VisibleFrame(HWND w, RECT& frame) {
+    RECT outer{};
+    if (!GetWindowRect(w, &outer)) return false;
+    frame = outer;
+    RECT extended{};
+    if (SUCCEEDED(DwmGetWindowAttribute(w, DWMWA_EXTENDED_FRAME_BOUNDS, &extended, sizeof(extended))))
+        frame = extended;
+    return true;
+}
+// Configured percent, or the latched width when a docked target refuses to shrink (up to 50%).
+void Layout();
+int StripWidth(const RECT& monitor) {
+    int monitorWidth = monitor.right - monitor.left;
+    int configured = MulDiv(monitorWidth, percent, 100);
+    int cap = MulDiv(monitorWidth, 50, 100);
+    int width = std::max(configured, fittedWidth);
+    return std::min(std::max(width, 1), cap);
+}
+// Grow once the docked window's visible edge stays past the strip. Require two identical
+// readings so a window animation cannot move the work area on every tick.
+void ConsiderFit() {
+    if (!registered || fullscreen || !SameTarget() || !IsWindowVisible(target) || IsIconic(target) || IsZoomed(target))
+        return;
+    if (strip.right <= strip.left) return;
+    RECT frame{};
+    if (!VisibleFrame(target, frame)) return;
+    if (std::abs(frame.left - strip.left) > 16) { pendingFit = 0; return; }
+    int overhang = frame.right - strip.right;
+    if (overhang <= 12) { pendingFit = 0; return; }
+    MONITORINFO mi{sizeof(mi)};
+    GetMonitorInfoW(MonitorFromPoint(POINT{0,0}, MONITOR_DEFAULTTOPRIMARY), &mi);
+    int cap = MulDiv(mi.rcMonitor.right - mi.rcMonitor.left, 50, 100);
+    int proposal = std::min<int>(frame.right - strip.left, cap);
+    if (proposal <= fittedWidth + 12) { pendingFit = 0; return; }
+    if (proposal != pendingFit) {
+        wchar_t line[160];
+        swprintf_s(line, L"fit pending overhang=%d proposal=%d strip=%d", overhang, proposal, strip.right - strip.left);
+        Log(line);
+        pendingFit = proposal;
+        return;
+    }
+    fittedWidth = proposal;
+    pendingFit = 0;
+    wchar_t line[160];
+    swprintf_s(line, L"fit latch width=%d (was strip %d)", fittedWidth, strip.right - strip.left);
+    Log(line);
+    Layout();
 }
 void PlaceTarget() {
     if (paused || fullscreen || !registered || !SameTarget() || !IsWindowVisible(target) || IsIconic(target)) return;
@@ -164,7 +224,7 @@ void Layout() {
     MONITORINFO mi{sizeof(mi)};
     GetMonitorInfoW(MonitorFromPoint(POINT{0,0}, MONITOR_DEFAULTTOPRIMARY), &mi);
     auto d = Data(); d.uEdge = ABE_LEFT; d.rc = mi.rcMonitor;
-    int width = MulDiv(mi.rcMonitor.right-mi.rcMonitor.left, percent, 100);
+    int width = StripWidth(mi.rcMonitor);
     d.rc.right = d.rc.left + width;
     SHAppBarMessage(ABM_QUERYPOS, &d); d.rc.right = d.rc.left + width;
     if (EqualRect(&strip, &d.rc)) { positioning = false; PlaceTarget(); return; }
@@ -198,7 +258,9 @@ void Tick() {
             if (matches.size() == 1) Attach(matches.front());
         }
     }
-    PlaceTarget(); InvalidateRect(bar, nullptr, FALSE);
+    PlaceTarget();
+    ConsiderFit();
+    InvalidateRect(bar, nullptr, FALSE);
 }
 void Load() {
     percent = std::clamp(_wtoi(Setting(L"WidthPercent", L"20").c_str()), 5, 50);
@@ -259,7 +321,10 @@ void Menu() {
             Save(L"ProcessName", processFilter); Save(L"TitleContains", titleFilter); Save(L"WindowClass", classFilter);
             Tick();
         } else MessageBoxW(bar, L"Cannot access this window. It may have closed or require the same elevation level.", L"LeftStrip", MB_ICONWARNING);
-    } else if (cmd>=105 && cmd<=150) { percent = cmd-100; Save(L"WidthPercent", std::to_wstring(percent)); Layout(); }
+    } else if (cmd>=105 && cmd<=150) {
+        percent = cmd-100; fittedWidth = 0; pendingFit = 0;
+        Save(L"WidthPercent", std::to_wstring(percent)); Layout();
+    }
     else switch(cmd) {
         case 1: ShellExecuteW(bar,L"open",L"notepad.exe", (L"\""+ini+L"\"").c_str(),nullptr,SW_SHOWNORMAL); break;
         case 2: ReleaseTarget(); Load(); Layout(); Tick(); break;

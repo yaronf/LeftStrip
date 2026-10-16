@@ -9,6 +9,7 @@ dist/
 *.ilk
 *.exp
 *.lib
+LeftStrip.log
 
 # Local IDE / OS
 .vs/
