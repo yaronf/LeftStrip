@@ -3,6 +3,7 @@
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <windows.h>
+#include <windowsx.h>
 #include <shellapi.h>
 #include <shlobj.h>
 #include <knownfolders.h>
@@ -248,9 +249,29 @@ BOOL CALLBACK Find(HWND w, LPARAM param) {
     if (!classFilter.empty() && Lower(Class(w)) != Lower(classFilter)) return TRUE;
     found->push_back(w); return TRUE;
 }
+std::wstring shownStatus;
+std::wstring StatusText() {
+    if (!SameTarget()) {
+        std::wstring message = L"Use the menu to select an app.";
+        if (processFilter.empty() && titleFilter.empty() && classFilter.empty()) return message;
+        message += L"\n\nOr open ";
+        if (!processFilter.empty()) message += processFilter;
+        if (!titleFilter.empty()) {
+            if (!processFilter.empty()) message += L" — ";
+            message += titleFilter;
+        } else if (processFilter.empty()) message += classFilter;
+        message += L" to place it here.";
+        return message;
+    }
+    std::wstring name = Process(target), title = Title(target);
+    if (title.size() > 80) title.resize(80);
+    std::wstring message = name.empty() ? title : name;
+    if (!name.empty() && !title.empty()) message += L"\n" + title;
+    message += L"\n\nUse the menu to choose a different window.";
+    return message;
+}
 void Tick() {
     if (paused) return;
-    bool wasAttached = SameTarget();
     if (!SameTarget()) {
         ReleaseTarget();
         // Never guess if all filters are empty, or more than one window matches.
@@ -261,7 +282,8 @@ void Tick() {
     }
     PlaceTarget();
     ConsiderFit();
-    if (SameTarget() != wasAttached) InvalidateRect(bar, nullptr, FALSE);
+    std::wstring status = StatusText();
+    if (status != shownStatus) { shownStatus = status; InvalidateRect(bar, nullptr, FALSE); }
 }
 void Load() {
     percent = std::clamp(_wtoi(Setting(L"WidthPercent", L"20").c_str()), 5, 50);
@@ -293,6 +315,25 @@ void TrayIcon(bool add) {
     n.hIcon = iconSmall ? iconSmall : LoadIconW(nullptr, IDI_APPLICATION);
     wcscpy_s(n.szTip, L"LeftStrip - right-click for controls");
     Shell_NotifyIconW(add ? NIM_ADD : NIM_DELETE, &n);
+}
+int Scale(HWND w, int px) {
+    UINT dpi = GetDpiForWindow(w);
+    return MulDiv(px, dpi ? (int)dpi : 96, 96);
+}
+RECT HamburgerRect(HWND w) {
+    int m = Scale(w, 14), s = Scale(w, 28);
+    return RECT{m, m, m + s, m + s};
+}
+void DrawHamburger(HDC dc, const RECT& box) {
+    int pad = (box.bottom - box.top) / 5;
+    int thick = std::max(2, (int)(box.bottom - box.top) / 9);
+    int step = (box.bottom - box.top - pad * 2 - thick) / 2;
+    HBRUSH brush = CreateSolidBrush(RGB(220, 220, 220));
+    for (int i = 0; i < 3; ++i) {
+        RECT line{box.left + pad, box.top + pad + i * step, box.right - pad, box.top + pad + i * step + thick};
+        FillRect(dc, &line, brush);
+    }
+    DeleteObject(brush);
 }
 void Menu() {
     HMENU menu = CreatePopupMenu(), pick = CreatePopupMenu(), widths = CreatePopupMenu(); choices.clear();
@@ -350,6 +391,12 @@ LRESULT CALLBACK WndProc(HWND w, UINT msg, WPARAM wp, LPARAM lp) {
     }
     switch(msg) {
         case Tray: if (lp==WM_RBUTTONUP || lp==WM_LBUTTONUP) Menu(); return 0;
+        case WM_LBUTTONUP: {
+            RECT hit = HamburgerRect(w);
+            POINT click{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
+            if (PtInRect(&hit, click)) Menu();
+            return 0;
+        }
         case WM_CONTEXTMENU: Menu(); return 0;
         case Relayout: case WM_DISPLAYCHANGE: Layout(); return 0;
         case WM_DPICHANGED: PostMessageW(w,Relayout,0,0); return 0;
@@ -364,10 +411,19 @@ LRESULT CALLBACK WndProc(HWND w, UINT msg, WPARAM wp, LPARAM lp) {
             SelectClipRgn(dc, nullptr);
             RECT r{}; GetClientRect(w,&r);
             FillRect(dc, &r, (HBRUSH)GetClassLongPtrW(w, GCLP_HBRBACKGROUND));
-            SetBkMode(dc,TRANSPARENT); SetTextColor(dc,RGB(210,210,210)); InflateRect(&r,-16,-16);
-            std::wstring text = SameTarget() ? L"LeftStrip\n\nTarget attached.\nRight-click here or the tray icon for controls."
-                : L"LeftStrip\n\nWaiting for one matching window.\n\nRight-click here or the tray icon to select an open window.\n\nIf several windows match, refine the configuration.";
-            DrawTextW(dc,text.c_str(),-1,&r,DT_WORDBREAK); EndPaint(w,&ps); return 0;
+            RECT burger = HamburgerRect(w);
+            DrawHamburger(dc, burger);
+            int margin = Scale(w, 16);
+            int iconSize = std::min(Scale(w, 48), std::max(1, (int)r.right - margin * 2));
+            int iconX = (r.right - iconSize) / 2;
+            int iconY = r.bottom - margin - iconSize;
+            if (iconLarge) DrawIconEx(dc, iconX, iconY, iconLarge, iconSize, iconSize, 0, nullptr, DI_NORMAL);
+            SetBkMode(dc,TRANSPARENT); SetTextColor(dc,RGB(210,210,210));
+            RECT text{margin, burger.bottom + margin, r.right - margin, iconY - margin};
+            std::wstring message = StatusText();
+            if (text.bottom > text.top)
+                DrawTextW(dc, message.c_str(), -1, &text, DT_WORDBREAK | DT_TOP | DT_LEFT);
+            EndPaint(w,&ps); return 0;
         }
         case WM_QUERYENDSESSION: return TRUE;
         case WM_ENDSESSION: if (wp) SendMessageW(w,WM_CLOSE,0,0); return 0;
@@ -383,7 +439,7 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR,int) {
     HANDLE mutex = CreateMutexW(nullptr,FALSE,L"Local\\LeftStrip.Native.v1");
     if (!mutex || GetLastError()==ERROR_ALREADY_EXISTS) { if(mutex)CloseHandle(mutex); return 0; }
     app = instance;
-    iconLarge = (HICON)LoadImageW(app, MAKEINTRESOURCEW(IDI_MAINICON), IMAGE_ICON, 0, 0, LR_DEFAULTSIZE);
+    iconLarge = (HICON)LoadImageW(app, MAKEINTRESOURCEW(IDI_MAINICON), IMAGE_ICON, 128, 128, 0);
     iconSmall = (HICON)LoadImageW(app, MAKEINTRESOURCEW(IDI_MAINICON), IMAGE_ICON,
         GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON), 0);
     wchar_t path[32768]{}; GetModuleFileNameW(nullptr,path,32768); exe=path;

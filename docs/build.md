@@ -22,7 +22,7 @@ Requires [Inno Setup 6](https://jrsoftware.org/isinfo.php) (`winget install JRSo
 package.cmd
 ```
 
-Output: `dist\LeftStrip-Setup-1.0.0.exe`.
+Output: `dist\LeftStrip-Setup-1.0.1.exe`.
 
 ## CMake
 
