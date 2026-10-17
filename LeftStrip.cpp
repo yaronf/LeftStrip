@@ -5,6 +5,7 @@
 #include <windows.h>
 #include <windowsx.h>
 #include <shellapi.h>
+#include <commctrl.h>
 #include <shlobj.h>
 #include <knownfolders.h>
 #include <dwmapi.h>
@@ -335,6 +336,43 @@ void DrawHamburger(HDC dc, const RECT& box) {
     }
     DeleteObject(brush);
 }
+std::wstring ProductVersion() {
+    wchar_t path[MAX_PATH]{};
+    if (!GetModuleFileNameW(nullptr, path, MAX_PATH)) return {};
+    DWORD unused = 0;
+    DWORD size = GetFileVersionInfoSizeW(path, &unused);
+    if (!size) return {};
+    std::vector<BYTE> data(size);
+    if (!GetFileVersionInfoW(path, 0, size, data.data())) return {};
+    void* value = nullptr;
+    UINT len = 0;
+    if (!VerQueryValueW(data.data(), L"\\StringFileInfo\\040904B0\\ProductVersion", &value, &len) || !value || !len)
+        return {};
+    return std::wstring(static_cast<wchar_t*>(value));
+}
+HRESULT CALLBACK AboutLink(HWND, UINT msg, WPARAM, LPARAM lp, LONG_PTR) {
+    if (msg == TDN_HYPERLINK_CLICKED)
+        ShellExecuteW(nullptr, L"open", reinterpret_cast<LPCWSTR>(lp), nullptr, nullptr, SW_SHOWNORMAL);
+    return S_OK;
+}
+void About() {
+    std::wstring version = ProductVersion();
+    std::wstring heading = version.empty() ? L"LeftStrip" : L"LeftStrip " + version;
+    std::wstring body =
+        L"Reserves a left strip of the primary monitor and places one existing window there.\n\n"
+        L"Copyright (c) 2026 Yaron Sheffer\n"
+        L"<A HREF=\"https://github.com/yaronf/LeftStrip\">github.com/yaronf/LeftStrip</A>";
+    TASKDIALOGCONFIG cfg{};
+    cfg.cbSize = sizeof(cfg);
+    cfg.dwFlags = TDF_ENABLE_HYPERLINKS | TDF_ALLOW_DIALOG_CANCELLATION | TDF_USE_HICON_MAIN;
+    cfg.hMainIcon = iconLarge ? iconLarge : LoadIconW(nullptr, IDI_APPLICATION);
+    cfg.pszWindowTitle = L"About LeftStrip";
+    cfg.pszMainInstruction = heading.c_str();
+    cfg.pszContent = body.c_str();
+    cfg.pfCallback = AboutLink;
+    if (FAILED(TaskDialogIndirect(&cfg, nullptr, nullptr, nullptr)))
+        MessageBoxW(bar, (heading + L"\n\n" + L"Copyright (c) 2026 Yaron Sheffer").c_str(), L"About LeftStrip", MB_OK);
+}
 void Menu() {
     HMENU menu = CreatePopupMenu(), pick = CreatePopupMenu(), widths = CreatePopupMenu(); choices.clear();
     EnumWindows([](HWND w, LPARAM)->BOOL { if (Eligible(w) && choices.size()<200) choices.push_back(w); return TRUE; }, 0);
@@ -352,6 +390,8 @@ void Menu() {
     AppendMenuW(menu, MF_STRING | (keepTop ? MF_CHECKED:0), 3, L"Keep target on top");
     AppendMenuW(menu, MF_STRING | (StartupEnabled() ? MF_CHECKED:0), 4, L"Start at sign-in");
     AppendMenuW(menu, MF_STRING, 5, paused ? L"Resume reservation" : L"Pause and release space");
+    AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+    AppendMenuW(menu, MF_STRING, 7, L"About LeftStrip");
     AppendMenuW(menu, MF_STRING, 6, L"Exit and restore");
     POINT p{}; GetCursorPos(&p); SetForegroundWindow(bar);
     UINT cmd = TrackPopupMenu(menu, TPM_RETURNCMD | TPM_RIGHTBUTTON, p.x,p.y,0,bar,nullptr);
@@ -375,6 +415,7 @@ void Menu() {
         case 5: if (!paused) { paused=true; Unregister(); ReleaseTarget(); ShowWindow(bar,SW_HIDE); }
                 else { paused=false; Register(); Tick(); } break;
         case 6: SendMessageW(bar,WM_CLOSE,0,0); break;
+        case 7: About(); break;
     }
 }
 LRESULT CALLBACK WndProc(HWND w, UINT msg, WPARAM wp, LPARAM lp) {

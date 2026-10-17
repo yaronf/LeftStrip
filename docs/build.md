@@ -24,6 +24,14 @@ package.cmd
 
 Output: `dist\LeftStrip-Setup-1.0.1.exe`.
 
+## Version
+
+About reads the product version from the executable. On a release, set the same version in:
+
+- `LeftStrip.rc` (`FILEVERSION`, `PRODUCTVERSION`, `FileVersion`, `ProductVersion`)
+- `LeftStrip.manifest` (`assemblyIdentity version`)
+- `installer/LeftStrip.iss` (`MyAppVersion`)
+
 ## CMake
 
 ```powershell

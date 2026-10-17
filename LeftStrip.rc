@@ -1,2 +1,34 @@
 #include "resource.h"
+
 IDI_MAINICON ICON "LeftStrip.ico"
+1 24 "LeftStrip.manifest"
+
+// Bump this together with MyAppVersion in installer/LeftStrip.iss.
+1 VERSIONINFO
+FILEVERSION 1,0,1,0
+PRODUCTVERSION 1,0,1,0
+FILEFLAGSMASK 0x3fL
+FILEFLAGS 0
+FILEOS 0x40004L
+FILETYPE 0x1L
+FILESUBTYPE 0x0L
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "040904B0"
+    BEGIN
+      VALUE "CompanyName", "Yaron Sheffer"
+      VALUE "FileDescription", "LeftStrip"
+      VALUE "FileVersion", "1.0.1"
+      VALUE "InternalName", "LeftStrip"
+      VALUE "LegalCopyright", "Copyright (c) 2026 Yaron Sheffer"
+      VALUE "OriginalFilename", "LeftStrip.exe"
+      VALUE "ProductName", "LeftStrip"
+      VALUE "ProductVersion", "1.0.1"
+    END
+  END
+  BLOCK "VarFileInfo"
+  BEGIN
+    VALUE "Translation", 0x409, 1200
+  END
+END

@@ -4,7 +4,7 @@
 
 #define MyAppName "LeftStrip"
 #define MyAppVersion "1.0.1"
-#define MyAppPublisher "LeftStrip contributors"
+#define MyAppPublisher "Yaron Sheffer"
 #define MyAppURL "https://github.com/yaronf/LeftStrip"
 #define MyAppExeName "LeftStrip.exe"
 
