@@ -250,6 +250,7 @@ BOOL CALLBACK Find(HWND w, LPARAM param) {
 }
 void Tick() {
     if (paused) return;
+    bool wasAttached = SameTarget();
     if (!SameTarget()) {
         ReleaseTarget();
         // Never guess if all filters are empty, or more than one window matches.
@@ -260,7 +261,7 @@ void Tick() {
     }
     PlaceTarget();
     ConsiderFit();
-    InvalidateRect(bar, nullptr, FALSE);
+    if (SameTarget() != wasAttached) InvalidateRect(bar, nullptr, FALSE);
 }
 void Load() {
     percent = std::clamp(_wtoi(Setting(L"WidthPercent", L"20").c_str()), 5, 50);
@@ -357,7 +358,12 @@ LRESULT CALLBACK WndProc(HWND w, UINT msg, WPARAM wp, LPARAM lp) {
         case WM_ACTIVATE: if (registered) { auto d=Data(); SHAppBarMessage(ABM_ACTIVATE,&d); } break;
         case WM_WINDOWPOSCHANGED: if (registered) { auto d=Data(); SHAppBarMessage(ABM_WINDOWPOSCHANGED,&d); } break;
         case WM_PAINT: {
-            PAINTSTRUCT ps{}; HDC dc=BeginPaint(w,&ps); RECT r{}; GetClientRect(w,&r);
+            PAINTSTRUCT ps{}; HDC dc=BeginPaint(w,&ps);
+            // A width change only invalidates the new edge. Drop that clip and repaint the whole strip,
+            // or the previous text wrap stays beside the new one.
+            SelectClipRgn(dc, nullptr);
+            RECT r{}; GetClientRect(w,&r);
+            FillRect(dc, &r, (HBRUSH)GetClassLongPtrW(w, GCLP_HBRBACKGROUND));
             SetBkMode(dc,TRANSPARENT); SetTextColor(dc,RGB(210,210,210)); InflateRect(&r,-16,-16);
             std::wstring text = SameTarget() ? L"LeftStrip\n\nTarget attached.\nRight-click here or the tray icon for controls."
                 : L"LeftStrip\n\nWaiting for one matching window.\n\nRight-click here or the tray icon to select an open window.\n\nIf several windows match, refine the configuration.";
@@ -383,7 +389,7 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR,int) {
     wchar_t path[32768]{}; GetModuleFileNameW(nullptr,path,32768); exe=path;
     ini = ResolveIni(exe);
     taskbarCreated=RegisterWindowMessageW(L"TaskbarCreated");
-    WNDCLASSEXW wc{sizeof(wc)}; wc.lpfnWndProc=WndProc; wc.hInstance=instance; wc.lpszClassName=ClassName;
+    WNDCLASSEXW wc{sizeof(wc)}; wc.style=CS_HREDRAW|CS_VREDRAW; wc.lpfnWndProc=WndProc; wc.hInstance=instance; wc.lpszClassName=ClassName;
     wc.hIcon = iconLarge; wc.hIconSm = iconSmall;
     wc.hCursor=LoadCursorW(nullptr,IDC_ARROW); wc.hbrBackground=CreateSolidBrush(RGB(30,30,30));
     RegisterClassExW(&wc);
