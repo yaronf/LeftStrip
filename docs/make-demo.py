@@ -68,31 +68,56 @@ def window(base, rect, accent=False):
     return Image.alpha_composite(base, layer)
 
 
+def segment(t, keys):
+    if t <= keys[0][0]:
+        return keys[0][1]
+    for (t0, r0), (t1, r1) in zip(keys, keys[1:]):
+        if t <= t1:
+            return rect_lerp(r0, r1, span(t, t0, t1))
+    return keys[-1][1]
+
+
 def frame_at(t):
     img = Image.new("RGBA", (W, H), DESK)
     d = ImageDraw.Draw(img)
     sx, sy, sw, sh = SCREEN
     strip_p = span(t, 0.7, 1.35)
     move_a = span(t, 1.35, 2.45)
-    move_b = span(t, 2.35, 3.35)
 
     a0 = (sx + 36, sy + 48, 250, 300)
     b0 = (sx + 330, sy + 78, 470, 280)
     a1 = (sx + 14, sy + 16, STRIP_W - 28, sh - 32)
+    # The remaining area is the whole screen once the strip is reserved.
     b1 = (sx + STRIP_W + 18, sy + 16, sw - STRIP_W - 36, sh - 32)
+    b_min = (sx + STRIP_W + 18, sy + sh - 72, 230, 46)
+    # Slide over the strip; the docked window is drawn later, so it stays on top.
+    b_over = (sx + 70, sy + 70, 420, 250)
 
     if strip_p > 0:
         grow = (sx, sy + 10, STRIP_W * strip_p, sh - 20)
         rr(d, grow, 18, STRIP)
 
-    img = window(img, rect_lerp(b0, b1, move_b), accent=False)
+    b_rect = segment(t, [
+        (0.0, b0),
+        (2.35, b0),
+        (3.35, b1),
+        (4.15, b1),
+        (4.7, b_min),
+        (5.35, b_min),
+        (6.15, b1),
+        (6.7, b1),
+        (7.45, b_over),
+        (8.15, b_over),
+        (8.9, b1),
+    ])
+    img = window(img, b_rect, accent=False)
     img = window(img, rect_lerp(a0, a1, move_a), accent=True)
     return img.convert("RGB")
 
 
 def main():
     os.makedirs(OUT, exist_ok=True)
-    duration = 4.6
+    duration = 9.6
     n = int(duration * FPS)
     for i in range(n):
         frame_at(i / FPS).save(os.path.join(OUT, f"f{i:04d}.png"))

@@ -4,7 +4,7 @@ Windows 11 tray utility that reserves a left strip of the primary monitor (Shell
 
 Default strip width: 20% of the monitor. The target app stays a normal separate window.
 
-![Two plain windows. One slides into a left strip while the other fills the rest.](docs/demo.gif)
+![One window slides into a left strip. The other fills the rest, minimizes, and stays underneath.](docs/demo.gif)
 
 ## Quick start
 
