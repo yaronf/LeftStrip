@@ -1,8 +1,8 @@
 """Abstract LeftStrip loop. Renders PNG frames for ffmpeg to encode."""
 import os
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 
-W, H = 960, 540
+W, H = 960, 588
 FPS = 20
 OUT = os.path.join(os.path.dirname(__file__), "_frames")
 
@@ -16,6 +16,17 @@ SHADOW = (30, 40, 55, 28)
 
 SCREEN = (48, 36, 864, 468)  # x, y, w, h
 STRIP_W = 196
+FONT = ImageFont.truetype(r"C:\Windows\Fonts\segoeui.ttf", 22)
+
+# About 15 characters per second, slower than Netflix's 17. The picture waits.
+CAPTIONS = [
+    (0.15, 1.95, "Two ordinary windows"),
+    (2.15, 4.75, "A strip is reserved on the left"),
+    (4.95, 6.95, "One window moves into it"),
+    (7.15, 10.15, "The space beside it is now the whole screen"),
+    (10.35, 13.35, "Minimize and maximize stay inside that area"),
+    (13.55, 16.15, "The docked window stays on top"),
+]
 
 
 def ease(t):
@@ -77,12 +88,51 @@ def segment(t, keys):
     return keys[-1][1]
 
 
+def caption_alpha(t, start, end):
+    fade = 0.18
+    if t < start or t > end:
+        return 0.0
+    alpha = 1.0
+    if t < start + fade:
+        alpha = (t - start) / fade
+    if t > end - fade:
+        alpha = min(alpha, (end - t) / fade)
+    return max(0.0, min(1.0, alpha))
+
+
+def draw_caption(base, t):
+    shown = None
+    for start, end, line in CAPTIONS:
+        alpha = caption_alpha(t, start, end)
+        if alpha > 0:
+            shown = (line, alpha)
+            break
+    if shown is None:
+        return base
+    line, alpha = shown
+    layer = Image.new("RGBA", base.size, (0, 0, 0, 0))
+    d = ImageDraw.Draw(layer)
+    bbox = d.textbbox((0, 0), line, font=FONT)
+    tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
+    x = (W - tw) / 2 - bbox[0]
+    y = 528 - bbox[1]
+    pad_x, pad_y = 18, 10
+    ink = int(235 * alpha)
+    d.rounded_rectangle(
+        (x + bbox[0] - pad_x, y + bbox[1] - pad_y, x + bbox[2] + pad_x, y + bbox[3] + pad_y),
+        radius=14,
+        fill=(28, 34, 46, ink),
+    )
+    d.text((x, y), line, font=FONT, fill=(255, 255, 255, int(255 * alpha)))
+    return Image.alpha_composite(base, layer)
+
+
 def frame_at(t):
     img = Image.new("RGBA", (W, H), DESK)
     d = ImageDraw.Draw(img)
     sx, sy, sw, sh = SCREEN
-    strip_p = span(t, 0.7, 1.35)
-    move_a = span(t, 1.35, 2.45)
+    strip_p = span(t, 2.25, 3.00)
+    move_a = span(t, 5.05, 6.35)
 
     a0 = (sx + 36, sy + 48, 250, 300)
     b0 = (sx + 330, sy + 78, 470, 280)
@@ -99,25 +149,26 @@ def frame_at(t):
 
     b_rect = segment(t, [
         (0.0, b0),
-        (2.35, b0),
-        (3.35, b1),
-        (4.15, b1),
-        (4.7, b_min),
-        (5.35, b_min),
-        (6.15, b1),
-        (6.7, b1),
-        (7.45, b_over),
-        (8.15, b_over),
-        (8.9, b1),
+        (7.25, b0),
+        (8.35, b1),
+        (10.45, b1),
+        (11.15, b_min),
+        (11.85, b_min),
+        (12.75, b1),
+        (13.65, b1),
+        (14.45, b_over),
+        (15.15, b_over),
+        (15.90, b1),
     ])
     img = window(img, b_rect, accent=False)
     img = window(img, rect_lerp(a0, a1, move_a), accent=True)
+    img = draw_caption(img, t)
     return img.convert("RGB")
 
 
 def main():
     os.makedirs(OUT, exist_ok=True)
-    duration = 9.6
+    duration = 16.6
     n = int(duration * FPS)
     for i in range(n):
         frame_at(i / FPS).save(os.path.join(OUT, f"f{i:04d}.png"))
