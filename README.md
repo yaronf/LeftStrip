@@ -4,6 +4,8 @@ Windows 11 tray utility that reserves a left strip of the primary monitor (Shell
 
 Default strip width: 20% of the monitor. The target app stays a normal separate window.
 
+![Two plain windows. One slides into a left strip while the other fills the rest.](docs/demo.gif)
+
 ## Quick start
 
 **Installer:** run `LeftStrip-Setup-*.exe` ([Releases](https://github.com/yaronf/LeftStrip/releases) or build with `package.cmd`). Installs to `%LocalAppData%\Programs\LeftStrip`; config in `%AppData%\LeftStrip\`.
