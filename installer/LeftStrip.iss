@@ -3,7 +3,7 @@
 ; (or compile this .iss after LeftStrip.exe exists in the repo root).
 
 #define MyAppName "LeftStrip"
-#define MyAppVersion "1.0.1"
+#define MyAppVersion "1.0.2"
 #define MyAppPublisher "Yaron Sheffer"
 #define MyAppURL "https://github.com/yaronf/LeftStrip"
 #define MyAppExeName "LeftStrip.exe"

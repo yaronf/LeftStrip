@@ -20,7 +20,7 @@ ProcessName=YourDashboard.exe
 TitleContains=Dashboard
 WindowClass=
 PollMilliseconds=1000
-AlwaysOnTop=0
+AlwaysOnTop=1
 RestoreOnExit=1
 ```
 
@@ -31,7 +31,7 @@ RestoreOnExit=1
 | `TitleContains` | Case-insensitive literal substring (no regex/wildcards). |
 | `WindowClass` | Exact class name, optional (Electron often `Chrome_WidgetWin_1`). |
 | `PollMilliseconds` | 250–10000; placement is re-applied on this interval. |
-| `AlwaysOnTop` | `0`/`1`; optional topmost on the target. |
+| `AlwaysOnTop` | `0`/`1`. Default `1`: keep the target on top. |
 | `RestoreOnExit` | `1` restores saved placement on exit/pause/reload/switch; `0` leaves it. Never closes the app. |
 
 Filters combine with **AND**; empty ones are ignored. If all are empty, nothing attaches automatically.

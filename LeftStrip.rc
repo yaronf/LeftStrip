@@ -5,8 +5,8 @@ IDI_MAINICON ICON "LeftStrip.ico"
 
 // Bump this together with MyAppVersion in installer/LeftStrip.iss.
 1 VERSIONINFO
-FILEVERSION 1,0,1,0
-PRODUCTVERSION 1,0,1,0
+FILEVERSION 1,0,2,0
+PRODUCTVERSION 1,0,2,0
 FILEFLAGSMASK 0x3fL
 FILEFLAGS 0
 FILEOS 0x40004L
@@ -19,12 +19,12 @@ BEGIN
     BEGIN
       VALUE "CompanyName", "Yaron Sheffer"
       VALUE "FileDescription", "LeftStrip"
-      VALUE "FileVersion", "1.0.1"
+      VALUE "FileVersion", "1.0.2"
       VALUE "InternalName", "LeftStrip"
       VALUE "LegalCopyright", "Copyright (c) 2026 Yaron Sheffer"
       VALUE "OriginalFilename", "LeftStrip.exe"
       VALUE "ProductName", "LeftStrip"
-      VALUE "ProductVersion", "1.0.1"
+      VALUE "ProductVersion", "1.0.2"
     END
   END
   BLOCK "VarFileInfo"

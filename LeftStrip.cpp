@@ -70,7 +70,7 @@ void WriteDefaultIni(const std::wstring& path) {
     WritePrivateProfileStringW(L"LeftStrip", L"TitleContains", L"", path.c_str());
     WritePrivateProfileStringW(L"LeftStrip", L"WindowClass", L"", path.c_str());
     WritePrivateProfileStringW(L"LeftStrip", L"PollMilliseconds", L"1000", path.c_str());
-    WritePrivateProfileStringW(L"LeftStrip", L"AlwaysOnTop", L"0", path.c_str());
+    WritePrivateProfileStringW(L"LeftStrip", L"AlwaysOnTop", L"1", path.c_str());
     WritePrivateProfileStringW(L"LeftStrip", L"RestoreOnExit", L"1", path.c_str());
 }
 // Portable: LeftStrip.ini beside the exe. Installed: %AppData%\LeftStrip\LeftStrip.ini
@@ -204,8 +204,16 @@ void ConsiderFit() {
     Log(line);
     Layout();
 }
+// A full-height strip sits flush with the screen, which makes Windows square the corners.
+// Ask for the normal rounded style so the corner gaps stay transparent.
+void PreferRounded(HWND w) {
+    if (!w) return;
+    DWM_WINDOW_CORNER_PREFERENCE pref = DWMWCP_ROUND;
+    DwmSetWindowAttribute(w, DWMWA_WINDOW_CORNER_PREFERENCE, &pref, sizeof(pref));
+}
 void PlaceTarget() {
     if (paused || fullscreen || !registered || !SameTarget() || !IsWindowVisible(target) || IsIconic(target)) return;
+    PreferRounded(target);
     // A maximized target obeys the reduced work area, so restore it before moving.
     if (IsZoomed(target)) { ShowWindowAsync(target, SW_RESTORE); return; }
     RECT wanted = strip, outer{}, visible{};
@@ -233,6 +241,7 @@ void Layout() {
     SHAppBarMessage(ABM_SETPOS, &d); strip = d.rc;
     SetWindowPos(bar, HWND_BOTTOM, strip.left, strip.top, strip.right-strip.left, strip.bottom-strip.top,
         SWP_NOACTIVATE | SWP_SHOWWINDOW);
+    PreferRounded(bar);
     positioning = false; PlaceTarget();
 }
 bool Register() {
@@ -290,7 +299,7 @@ void Load() {
     percent = std::clamp(_wtoi(Setting(L"WidthPercent", L"20").c_str()), 5, 50);
     interval = std::clamp(_wtoi(Setting(L"PollMilliseconds", L"1000").c_str()), 250, 10000);
     processFilter = Setting(L"ProcessName"); titleFilter = Setting(L"TitleContains"); classFilter = Setting(L"WindowClass");
-    keepTop = Setting(L"AlwaysOnTop", L"0") == L"1";
+    keepTop = Setting(L"AlwaysOnTop", L"1") == L"1";
     restoreOnExit = Setting(L"RestoreOnExit", L"1") != L"0";
     SetTimer(bar, 1, interval, nullptr);
 }
@@ -491,6 +500,7 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR,int) {
     wc.hCursor=LoadCursorW(nullptr,IDC_ARROW); wc.hbrBackground=CreateSolidBrush(RGB(30,30,30));
     RegisterClassExW(&wc);
     bar=CreateWindowExW(WS_EX_TOOLWINDOW|WS_EX_NOACTIVATE,ClassName,L"LeftStrip",WS_POPUP,0,0,1,1,nullptr,nullptr,instance,nullptr);
+    PreferRounded(bar);
     if (!bar) {
         DeleteObject(wc.hbrBackground);
         if (iconLarge) DestroyIcon(iconLarge);
