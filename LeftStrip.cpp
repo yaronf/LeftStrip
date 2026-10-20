@@ -519,6 +519,7 @@ void Menu() {
         Save(L"WidthPercent", std::to_wstring(percent)); Layout();
     }
     else switch(cmd) {
+        case 0: break; // Menu dismissed.
         case CmdEdit: ShellExecuteW(bar,L"open",L"notepad.exe", (L"\""+ini+L"\"").c_str(),nullptr,SW_SHOWNORMAL); break;
         case CmdReload: ReleaseTarget(); Load(); Layout(); Tick(); break;
         case CmdKeepTop: keepTop=!keepTop; Save(L"AlwaysOnTop", keepTop ? IniYes : IniNo); Tick(); break;
@@ -527,6 +528,7 @@ void Menu() {
                 else { paused=false; Register(); Tick(); } break;
         case CmdExit: SendMessageW(bar,WM_CLOSE,0,0); break;
         case CmdAbout: About(); break;
+        default: std::abort();
     }
 }
 /// Strip window: AppBar callbacks, input, and paint.
@@ -582,6 +584,7 @@ LRESULT CALLBACK WndProc(HWND w, UINT msg, WPARAM wp, LPARAM lp) {
         case WM_ENDSESSION: if (wp) SendMessageW(w,WM_CLOSE,0,0); return 0;
         case WM_CLOSE: if (!quitting) { quitting=true; KillTimer(w,PollTimerId); Unregister(); ReleaseTarget(); TrayIcon(false); DestroyWindow(w); } return 0;
         case WM_DESTROY: PostQuitMessage(0); return 0;
+        default: //fallthrough
     }
     return DefWindowProcW(w,msg,wp,lp);
 }
