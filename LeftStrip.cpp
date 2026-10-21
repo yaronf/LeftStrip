@@ -75,8 +75,11 @@ constexpr int IconLoadPx = 128;
 /// The strip window exists at this size until Layout claims the work area.
 constexpr int InitialStripPx = 1;
 
+/// #1E1E1E, the VS Code dark background.
 constexpr COLORREF StripColor = RGB(30, 30, 30);
+/// Gainsboro, #DCDCDC.
 constexpr COLORREF HamburgerColor = RGB(220, 220, 220);
+/// Light gray, #D2D2D2.
 constexpr COLORREF StatusColor = RGB(210, 210, 210);
 
 /// English (US) Unicode version block. 0x0409 is the language, 1200 (0x04B0) is the code page.
